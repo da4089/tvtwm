@@ -1,0 +1,180 @@
+For those of you like me who want to try software before reading
+the instructions, all you have to do to get started is add a single
+line to your .twmrc file.  Something like this:
+
+  VirtualDesktop "3000x2000"
+
+Now for the verbose description:
+
+This is yet another, different implementation of the Virtual Desktop
+concept for twm.  I call this version tvtwm (Tom's Virtual twm).  It is
+based on the R4 version of twm with up to fix-14 installed.  This
+implementation is modeled after swm (Solbourne Window Manager) and
+includes the very nice ability to move windows into and out of the
+panner.  It should be noted that none of this code came from the vtwm
+implementation.  If you have problems and/or patches you can email me
+at the address at the end of this file.
+
+If we look at different implementations of the Virtual Desktop, I think
+we can relate them to soft drinks:
+
+swm   - Classic Coke  "The Real Thing"
+tvtwm - Diet Coke     "Same as Coke but not as sweet"
+vtwm  - Diet Pepsi    "Not as sweet as Coke, some people may
+		       prefer it to any flavor of Coke"
+
+There are pros and cons to the vtwm and swm/tvtwm implementations.  Most
+revolve around whether or not to use an additional window for the
+scrolling desktop or to simply move windows around on the actual
+root window.
+
+vtwm moves windows on the actual root window, swm/tvtwm use an
+additional window to perform the scrolling.
+
+Pros:
+  vtwm    Simple to implement.
+          Programs like xsetroot continue to work.
+
+  tvtwm   Half the network traffic when the desktop scrolls,
+	    only a ConfigureNotify event has to be sent.
+	  Faster scrolling of the desktop.
+	  Desktop background image will actually scroll.
+	  Opens the door for possible multiple Virtual Desktop
+	    windows.
+Cons:
+  vtwm	  Twice as much network traffic when the desktop scrolls,
+	    each window has to be moved and then a ConfigureNotify
+	    event must be sent.
+	  Slower scrolling of the desktop.
+	  Desktop background image does not scroll.
+
+  tvtwm	  Programs like xsetroot no longer work, additional work
+	    needs to be done to find the Virtual Desktop window.
+	  Programs that attempt to find the size of the window
+	    manager decoration may fail if the traverse the window
+	    tree until they run into the actual root window.
+
+The ICCCM states that more work needs to be done in the area of
+virtual root windows, so there isn't any clear answer on the right
+way to implement this feature.  Having said that, let me describe
+how I've butchered the code, what currently doesn't work, what would
+be nice if it worked, etc.
+
+1. First a description of how the panner works.  Basically,
+   mouse button 1 allows you to change your position in the
+   desktop.  Mouse button 2 allows you to drag any of the
+   small "virtual" windows.  During a window move operation
+   you can move the pointer into and out of the panner.
+   Resizing the panner will of course resize the desktop.
+
+2. I completely re-wrote the window move code.  In menus.c I 
+   simply commented out the window move code that is there and
+   didn't touch any code related to window moves in events.c.
+   The new window move code is in a new file called move.c.
+
+3. Because of the new window move code, I have not looked at 
+   or implemented the MoveOpaque feature.  With the Virtual Desktop
+   enabled, users typically won't want to use MoveOpaque anyway 
+   because it's not as clean to move into and out of the panner.
+   The constrained move and DontMoveOff functionality is also
+   missing.
+
+4. Rather than the f.nail and "NailedDown" features of vtwm, tvtwm
+   uses the same terminology as swm.  In tvtwm, windows that do
+   not move when the desktop is panned are called "sticky" windows.
+   There is a command called f.stick and a "Sticky" list of windows
+   that will be sticky when started.  Also, a side effect/feature
+   of the way sticky windows are impemented means that sticky
+   windows will always be on top of non-sticky windows.  The sticky-ness
+   of a window is remembered during an f.restart if RestartPreviousState
+   is set.
+
+5. USPosition vs. PPosition - When a window has USPosition hints
+   set, the window will be positioned at that exact pixel location.
+   When PPosition hints are set, the window will be positioned at 
+   the pixel location plus the current offset of the Virtual Desktop.
+   For example, if the desktop has been panned to +200+500 and 
+   a window is mapped with PPosition +100+100, the window will be
+   positioned at +300+600 on the desktop.
+
+6. How does the icon gravity stuff work in relation to different areas
+   of the Virtual Desktop?  I don't know, and I don't really have the
+   time to look into the problem.  It might be nice to have seperate icon
+   regions in different quadrants of the Virtual Desktop.  If you use
+   icon managers and make them sticky then you don't have any problems.
+
+7. The small "virtual" windows in the panner will have the same color
+   as their corresponding window titlebars and icons have.
+
+8. The initialization files .tvtwmrc.<screen number> and .tvtwmrc will
+   be attempted before .twmrc.<screen number> .twmrc.
+
+
+New Variables:
+
+VirtualDesktop "WIDTHxHEIGHT"
+  This variable simply specified the initial size of the Virtual Desktop.
+  Specifying this variable enables the Virtual Desktop feature.
+  Why didn't I use the same syntax as vtwm and also specify the panner
+  scale and geometry?  I don't know, lazy I guess.
+
+VirtualDesktopBackgroundPixmap "filename"
+  The pixmap image to display as the background of the Virtual Desktop window.
+
+VirtualDesktopBackground "color"
+  The background color of the VirtualDesktop window.  If
+  VirtualDesktopBackgroundPixmap is not set, the VirtualDesktop will have a
+  solid background of this color.
+
+VirtualDesktopForeground "color"
+  This color is only used if VirtualDesktopBackgroundPixmap is set.
+
+PannerGeometry "+-X+-Y"
+  Specifies the geometry at which the panner is to be placed.  The
+  default is "-0-0".
+
+PannerState "state"
+  This specifies the initial state of the panner.  Possible values
+  include "withdrawn", "iconic", and "normal".  The default state
+  is "normal".
+
+PannerScale scale
+  This specifies the scale of the panner.  The default number is 20.
+
+PannerBackgroundPixmap "filename"
+  The pixmap image to display as the background of the panner window.
+
+PannerBackground "color"
+  The background color of the panner window.  If PannerBackgroundPixmap
+  is not set, the panner will have a solid background of this color.
+
+PannerForeground "color"
+  This color is only used if PannerBackgroundPixmap is set.
+
+Sticky { window list }
+  A list of windows that will come up in a sticky state.
+
+New Commands:
+
+f.panner	- toggle making the panner visible
+f.scrollhome	- scroll the desktop to 0,0
+f.scrollup	- scroll the desktop up one screenful
+f.scrolldown	- scroll the desktop down one screenful
+f.scrollleft	- scroll the desktop left on screenful
+f.scrollright	- scroll the desktop right on screenful
+f.panup		- same as f.scrollup
+f.pandown	- same as f.scrolldown
+f.panleft	- same as f.scrollleft
+f.panright	- same as f.scrollright
+f.stick		- toggle making a window sticky or not
+
+
+A version of xsetroot, called ssetroot has been included as an
+example of how to find the Virtual Desktop window.
+
+--
+Tom LaStrange
+
+Solbourne Computer Inc.    ARPA: to...@Solbourne.COM
+1900 Pike Rd.              UUCP: ...!{boulder,sun}!stan!toml
+Longmont, CO  80501
